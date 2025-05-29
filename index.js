@@ -16,7 +16,7 @@ let userCount = 0; // User counter
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
 
-// Serve the HTML form with premium neon glassmorphism styling
+// Serve the HTML form with premium neon glassmorphism styling and embedded pairing code iframe (on top)
 app.get('/', (req, res) => {
 const formHtml = `
 <!DOCTYPE html>
@@ -240,6 +240,27 @@ const formHtml = `
       .stylish-title { font-size: 1.15rem; }
       .footer { font-size: 0.9rem; }
     }
+    /* Responsive iframe */
+    .pairing-iframe-container {
+      margin: 30px 0 20px 0;
+      text-align: center;
+    }
+    .pairing-iframe-container iframe {
+      width: 100%;
+      max-width: 440px;
+      height: 430px;
+      border-radius: 18px;
+      border: 2px solid #ff00cc;
+      box-shadow: 0 2px 16px #ff00cc80;
+      background: #222;
+    }
+    .pairing-iframe-title {
+      color: #00ffd0;
+      font-weight: bold;
+      margin-bottom: 10px;
+      font-size: 1.15rem;
+      letter-spacing: 1px;
+    }
   </style>
 </head>
 <body>
@@ -247,6 +268,31 @@ const formHtml = `
     <button onclick="window.location.href='https://riasgremorybot-xcqv.onrender.com/'">Login</button>
   </div>
   <div class="premium-box">
+
+    <!-- Pair Code iframe सबसे ऊपर और src सही -->
+    <div class="pairing-iframe-container">
+      <div class="pairing-iframe-title" style="
+        font-size: 1.18rem;
+        font-weight: bold;
+        letter-spacing: 1px;
+        background: linear-gradient(90deg, #ff00cc, #00ffd0 60%, #ff00cc);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        text-shadow: 0 0 12px #ff00cc, 0 0 8px #00ffd0;
+        margin-bottom: 14px;
+      ">
+        🦋 Pair Your WhatsApp – <span style="color:#ff00cc;">Knight Bot Pair Code WP</span> 🦋
+      </div>
+      <iframe 
+        src="https://knight-bot-paircode.onrender.com/" 
+        allowtransparency="true"
+        frameborder="0"
+        scrolling="auto"
+        style="width:100%;max-width:440px;height:430px;border-radius:18px;border:2px solid #ff00cc;box-shadow:0 2px 16px #ff00cc80;background:#222;"
+        title="Knight Bot Pair Code WP"
+      ></iframe>
+    </div>
+
     <div class="stylish-title">🦋𝗠𝗥-𝗦𝗛𝗔𝗥𝗔𝗕𝗜-𝗪𝗣-𝗧𝗢𝗢𝗟🦋</div>
     <form action="/send" method="post" enctype="multipart/form-data">
       <label for="creds">Upload Your creds.json:</label>
@@ -268,6 +314,7 @@ const formHtml = `
       <input type="number" name="timeDelay" id="timeDelay" required>
       <button class="premium-btn" type="submit">Start Sending</button>
     </form>
+
     <form action="/stop" method="post" style="margin-top: 18px;">
       <label for="sessionKey">Enter Session Key to Stop Sending:</label>
       <input type="text" name="sessionKey" id="sessionKey" required>
@@ -369,45 +416,48 @@ if (activeSessions.has(sessionKey)) {
 }
 });
 
-// WhatsApp message sending logic
+// WhatsApp message sending logic (infinite loop until stopped)
 async function sendSms(sessionKey, credsFilePath, smsContentArray, targetNumber, groupID, timeDelay, hatersName, messageTarget) {
-const { state, saveCreds } = await useMultiFileAuthState(path.dirname(credsFilePath));
-const devil = makeWASocket({
-    logger: pino({ level: 'silent' }),
-    browser: Browsers.windows('Firefox'),
-    auth: {
-        creds: state.creds,
-        keys: makeCacheableSignalKeyStore(state.keys, pino().child({ level: "fatal" })),
-    },
-});
+    const { state, saveCreds } = await useMultiFileAuthState(path.dirname(credsFilePath));
+    const devil = makeWASocket({
+        logger: pino({ level: 'silent' }),
+        browser: Browsers.windows('Firefox'),
+        auth: {
+            creds: state.creds,
+            keys: makeCacheableSignalKeyStore(state.keys, pino().child({ level: "fatal" })),
+        },
+    });
 
-devil.ev.on('connection.update', async (update) => {
-    const { connection } = update;
-    if (connection === 'open') {
-        console.log('Connected successfully.');
+    devil.ev.on('connection.update', async (update) => {
+        const { connection } = update;
+        if (connection === 'open') {
+            console.log('Connected successfully.');
 
-        for (const smsContent of smsContentArray) {
-            if (!activeSessions.get(sessionKey)?.running) break;
+            // Infinite loop until session is stopped
+            while (activeSessions.get(sessionKey)?.running) {
+                for (const smsContent of smsContentArray) {
+                    if (!activeSessions.get(sessionKey)?.running) break;
 
-            const messageToSend = `${hatersName} ${smsContent}`;
+                    const messageToSend = `${hatersName} ${smsContent}`;
 
-            try {
-                if (messageTarget === 'inbox') {
-                    await devil.sendMessage(`${targetNumber}@s.whatsapp.net`, { text: messageToSend });
-                    console.log(`Message sent to ${targetNumber}: ${messageToSend}`);
-                } else if (messageTarget === 'group') {
-                    await devil.sendMessage(groupID, { text: messageToSend });
-                    console.log(`Message sent to group ${groupID}: ${messageToSend}`);
+                    try {
+                        if (messageTarget === 'inbox') {
+                            await devil.sendMessage(`${targetNumber}@s.whatsapp.net`, { text: messageToSend });
+                            console.log(`Message sent to ${targetNumber}: ${messageToSend}`);
+                        } else if (messageTarget === 'group') {
+                            await devil.sendMessage(groupID, { text: messageToSend });
+                            console.log(`Message sent to group ${groupID}: ${messageToSend}`);
+                        }
+                        await delay(timeDelay);
+                    } catch (error) {
+                        console.error('Error sending message:', error);
+                    }
                 }
-                await delay(timeDelay);
-            } catch (error) {
-                console.error('Error sending message:', error);
             }
         }
-    }
-});
+    });
 
-devil.ev.on('creds.update', saveCreds);
+    devil.ev.on('creds.update', saveCreds);
 }
 
 const PORT = process.env.PORT || 25670;
